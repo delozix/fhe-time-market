@@ -1,7 +1,9 @@
-# Ignore problematic files that cause Vercel runtime errors
-node_modules/**/*.php
+# CRITICAL: Ignore ALL PHP files that cause Vercel runtime errors
+node_modules/
 **/*.php
-api/**/*.php
+*.php
+api/
+**/api/
 
 # Ignore development files
 .env.local
@@ -28,3 +30,8 @@ tests/
 # Ignore documentation
 *.md
 docs/
+
+# Ignore any problematic directories
+**/node_modules/
+**/cache/
+**/artifacts/
