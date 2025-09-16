@@ -121,16 +121,27 @@ export function useBlockchainProvider() {
     }
   }, [])
 
-  // Initialize on mount with delay
+  // Initialize only once on mount
   useEffect(() => {
+    let mounted = true
+    
     const initProvider = async () => {
+      if (!mounted) return
+      
       // Wait 2 seconds before initializing to avoid rate limits
       await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      if (!mounted) return
+      
       console.log('🔄 Initializing blockchain provider with RPC:', currentRPC.url)
       initializeProvider(currentRPC.url)
     }
     
     initProvider()
+    
+    return () => {
+      mounted = false
+    }
   }, []) // Only run once on mount
 
   return {

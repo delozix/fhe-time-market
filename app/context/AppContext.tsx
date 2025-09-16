@@ -26,7 +26,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (blockchain.provider && !contract.contract) {
       contract.initializeContract(blockchain.provider)
     }
-  }, [blockchain.provider, contract.contract, contract.initializeContract])
+  }, [blockchain.provider, contract.contract])
 
   // Connect signer when wallet is connected or changes
   React.useEffect(() => {
@@ -36,7 +36,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error('Failed to connect signer:', error)
       })
     }
-  }, [wallet.signer, contract.contract, contract.connectSigner])
+  }, [wallet.signer, contract.contract])
 
   const value = {
     wallet,
