@@ -6,7 +6,7 @@ import { OfferCard } from './components/OfferCard'
 import { RPCSelector } from './components/RPCSelector'
 import { useAppContext } from './context/AppContext'
 import { Clock, Plus, Zap, Shield } from 'lucide-react'
-import contractInfo from '../contract-info.json'
+import contractInfo from './contract-info.json'
 
 export default function Home() {
   const [showCreateModal, setShowCreateModal] = useState(false)
