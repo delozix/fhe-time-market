@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { CreateOfferModal } from './components/CreateOfferModal'
 import { OfferCard } from './components/OfferCard'
 import { RPCSelector } from './components/RPCSelector'
-import { useAppContext } from './components/WalletProvider'
+import { useAppContext } from './context/AppContext'
 import { Clock, Plus, Zap, Shield } from 'lucide-react'
 import contractInfo from '../contract-info.json'
 
@@ -19,31 +19,18 @@ export default function Home() {
   const { currentRPC, switchRPC, isConnected: blockchainConnected } = blockchain
 
   useEffect(() => {
-    console.log('Page effect triggered:', { 
-      hasContract: !!contract,
-      contractAddress: contractInfo.address || 'N/A'
-    })
-    
     if (contract) {
-      console.log('Loading offers data...')
       loadOffersData()
-    } else {
-      console.log('No contract available, checking wallet connection...')
-      if (isConnected) {
-        console.log('Wallet connected but no contract. This might be a network issue.')
-      }
     }
   }, [contract, isConnected])
 
   const loadOffersData = async () => {
     try {
       setLoading(true)
-      console.log('Loading offers data...')
       const offersData = await loadOffers()
-      console.log('Received offers data:', offersData)
       setOffers(offersData)
     } catch (error) {
-      console.error('Error loading offers:', error)
+      // Silent error handling for production
     } finally {
       setLoading(false)
     }
@@ -205,7 +192,6 @@ export default function Home() {
                   offer={offer}
                   onPurchase={loadOffersData}
                   onDeactivate={loadOffersData}
-                  onDelete={loadOffersData}
                   isOwner={wallet.address?.toLowerCase() === offer.seller.toLowerCase()}
                 />
               ))}

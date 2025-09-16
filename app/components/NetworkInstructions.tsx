@@ -43,7 +43,7 @@ export function NetworkInstructions({ isOpen, onClose, rpcUrl }: NetworkInstruct
               <h3 className="text-lg font-semibold text-white mb-3">Step 1: Add Sepolia Network</h3>
               <div className="bg-dark-700 p-4 rounded-lg">
                 <p className="text-dark-300 mb-3">
-                  If you don't have Sepolia network in MetaMask, add it manually:
+                  If you don&apos;t have Sepolia network in MetaMask, add it manually:
                 </p>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between bg-dark-600 p-3 rounded">
@@ -87,8 +87,8 @@ export function NetworkInstructions({ isOpen, onClose, rpcUrl }: NetworkInstruct
                 <ol className="list-decimal list-inside space-y-2 text-dark-300">
                   <li>Open MetaMask extension</li>
                   <li>Click on the network dropdown at the top</li>
-                  <li>Select "Sepolia Test Network"</li>
-                  <li>If you don't see it, add it using the details above</li>
+                  <li>Select &quot;Sepolia Test Network&quot;</li>
+                  <li>If you don&apos;t see it, add it using the details above</li>
                 </ol>
               </div>
             </div>

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 
-const DEFAULT_RPC = 'https://1rpc.io/sepolia'
+const DEFAULT_RPC = 'https://ethereum-sepolia-rpc.publicnode.com'
 
 export function useRPC() {
   const [currentRPC, setCurrentRPC] = useState(DEFAULT_RPC)

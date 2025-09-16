@@ -52,7 +52,7 @@ cp contracts/env.example contracts/.env
 
 ```bash
 cd contracts
-npx hardhat run scripts/deploy-v2.js --network sepolia
+npx hardhat run scripts/deploy-fhe.js --network sepolia
 ```
 
 ### 4. Start Development Server
@@ -80,9 +80,9 @@ CHAIN_ID=11155111
 ### Contract Deployment
 
 The contract is already deployed at:
-- **Address**: `0xEca1b6BBEE238a403c258D3FF49aF46d92cc9DbA`
+- **Address**: `0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51`
 - **Network**: Sepolia Testnet
-- **Explorer**: [View on Etherscan](https://sepolia.etherscan.io/address/0xEca1b6BBEE238a403c258D3FF49aF46d92cc9DbA)
+- **Explorer**: [View on Etherscan](https://sepolia.etherscan.io/address/0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51)
 
 ## 🎯 Usage
 
@@ -126,9 +126,11 @@ This DApp demonstrates FHEVM capabilities:
 ### Required Vercel Environment Variables
 
 ```
-SEPOLIA_RPC_URL=https://sepolia.drpc.org
-CONTRACT_ADDRESS=0xEca1b6BBEE238a403c258D3FF49aF46d92cc9DbA
-CHAIN_ID=11155111
+NEXT_PUBLIC_CONTRACT_ADDRESS=0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51
+NEXT_PUBLIC_NETWORK=sepolia
+NEXT_PUBLIC_CHAIN_ID=11155111
+NEXT_PUBLIC_FHE_RELAYER_URL=https://relayer.testnet.zama.cloud
+NEXT_PUBLIC_FHE_NETWORK=sepolia
 ```
 
 ## 🧪 Testing
@@ -156,7 +158,7 @@ npm start
 
 # Contract deployment
 cd contracts
-npx hardhat run scripts/deploy-v2.js --network sepolia
+npx hardhat run scripts/deploy-fhe.js --network sepolia
 
 # Contract verification
 npx hardhat verify --network sepolia <CONTRACT_ADDRESS>

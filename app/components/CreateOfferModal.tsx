@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { X, Clock, DollarSign, Users, FileText } from 'lucide-react'
-import { useAppContext } from './WalletProvider'
+import { useAppContext } from '../context/AppContext'
 import toast from 'react-hot-toast'
+import { ethers } from 'ethers'
 
 interface CreateOfferModalProps {
   onClose: () => void
@@ -29,181 +30,202 @@ export function CreateOfferModal({ onClose, onOfferCreated }: CreateOfferModalPr
       return
     }
 
+    if (!contract.contract) {
+      toast.error('Contract not initialized. Please wait and try again.')
+      return
+    }
+
     try {
       setIsSubmitting(true)
       
-      await contract.createOffer(
+      // Validate form data
+      if (!formData.title.trim() || !formData.description.trim()) {
+        toast.error('Title and description are required')
+        return
+      }
+
+      const price = parseFloat(formData.price)
+      const duration = parseInt(formData.duration)
+      const slots = parseInt(formData.availableSlots)
+
+      if (price <= 0 || duration <= 0 || slots <= 0) {
+        toast.error('Price, duration, and slots must be greater than 0')
+        return
+      }
+
+      toast.loading('Creating offer...', { id: 'create-offer' })
+
+      // Create FHE offer
+      await contract.createFHEOffer(
         formData.title,
         formData.description,
         formData.price,
         formData.duration,
         formData.availableSlots,
-        wallet.signer
+        wallet.signer!
       )
 
-      toast.success('Offer created successfully!')
-      
-      // Wait a bit for the blockchain to update
-      setTimeout(() => {
-        onOfferCreated()
-      }, 2000)
+      toast.success('Offer created successfully!', { id: 'create-offer' })
+      onOfferCreated()
+      onClose()
     } catch (error: any) {
-      toast.error(error.message || 'Failed to create offer')
+      console.error('Failed to create offer:', error)
+      toast.error(`Failed to create offer: ${error.message}`, { id: 'create-offer' })
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [field]: value
     }))
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-dark-800 border border-dark-700 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-white">Create Time Offer</h2>
-            <button
-              onClick={onClose}
-              className="p-2 text-dark-400 hover:text-white transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-2xl font-bold text-gray-900">Create New Offer</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+            disabled={isSubmitting}
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* FHE Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-blue-900">FHE Protected</h3>
+                <p className="text-sm text-blue-700">Your offer data is encrypted with Fully Homomorphic Encryption</p>
+              </div>
+            </div>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">
-                <FileText className="w-4 h-4 inline mr-2" />
-                Title
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                placeholder="e.g., 1-hour coding session"
-                className="input"
-                required
-              />
-            </div>
+          {/* Title */}
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+              <FileText className="inline w-4 h-4 mr-2" />
+              Title
+            </label>
+            <input
+              type="text"
+              id="title"
+              value={formData.title}
+              onChange={(e) => handleInputChange('title', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+              placeholder="Enter offer title"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
 
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">
-                Description
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                placeholder="Describe what you're offering..."
-                rows={4}
-                className="input resize-none"
-                required
-              />
-            </div>
+          {/* Description */}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+              <FileText className="inline w-4 h-4 mr-2" />
+              Description
+            </label>
+            <textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+              placeholder="Describe your time offer"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
 
-            {/* Price and Duration */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  <DollarSign className="w-4 h-4 inline mr-2" />
-                  Price (ETH)
-                </label>
-                <input
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  placeholder="0.01"
-                  step="0.001"
-                  min="0"
-                  className="input"
-                  required
-                />
-              </div>
+          {/* Price */}
+          <div>
+            <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-2">
+              <DollarSign className="inline w-4 h-4 mr-2" />
+              Price per Slot (ETH)
+            </label>
+            <input
+              type="number"
+              id="price"
+              step="0.001"
+              min="0"
+              value={formData.price}
+              onChange={(e) => handleInputChange('price', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+              placeholder="0.1"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">
-                  <Clock className="w-4 h-4 inline mr-2" />
-                  Duration (hours)
-                </label>
-                <input
-                  type="number"
-                  name="duration"
-                  value={formData.duration}
-                  onChange={handleChange}
-                  placeholder="1"
-                  min="1"
-                  className="input"
-                  required
-                />
-              </div>
-            </div>
+          {/* Duration */}
+          <div>
+            <label htmlFor="duration" className="block text-sm font-medium text-gray-700 mb-2">
+              <Clock className="inline w-4 h-4 mr-2" />
+              Duration (Days)
+            </label>
+            <input
+              type="number"
+              id="duration"
+              min="1"
+              value={formData.duration}
+              onChange={(e) => handleInputChange('duration', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+              placeholder="7"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
 
-            {/* Available Slots */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">
-                <Users className="w-4 h-4 inline mr-2" />
-                Available Slots
-              </label>
-              <input
-                type="number"
-                name="availableSlots"
-                value={formData.availableSlots}
-                onChange={handleChange}
-                placeholder="5"
-                min="1"
-                className="input"
-                required
-              />
-            </div>
+          {/* Available Slots */}
+          <div>
+            <label htmlFor="availableSlots" className="block text-sm font-medium text-gray-700 mb-2">
+              <Users className="inline w-4 h-4 mr-2" />
+              Available Slots
+            </label>
+            <input
+              type="number"
+              id="availableSlots"
+              min="1"
+              value={formData.availableSlots}
+              onChange={(e) => handleInputChange('availableSlots', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
+              placeholder="5"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
 
-            {/* FHE Notice */}
-            <div className="bg-primary-500/10 border border-primary-500/20 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-black text-xs font-bold">FHE</span>
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-primary-400 mb-1">
-                    Fully Homomorphic Encryption
-                  </h4>
-                  <p className="text-xs text-dark-300">
-                    Your offer data will be encrypted using FHE technology, ensuring privacy while maintaining functionality.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary"
-                disabled={isSubmitting}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Creating...' : 'Create Offer'}
-              </button>
-            </div>
-          </form>
-        </div>
+          {/* Submit Button */}
+          <div className="flex justify-end space-x-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Creating...' : 'Create Offer'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

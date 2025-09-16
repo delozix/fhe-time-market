@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Clock, User, DollarSign, Users, ShoppingCart, Shield } from 'lucide-react'
-import { useAppContext } from './WalletProvider'
+import { useAppContext } from '../context/AppContext'
 import toast from 'react-hot-toast'
 
 interface OfferCardProps {
@@ -19,15 +19,13 @@ interface OfferCardProps {
   }
   onPurchase: () => void
   onDeactivate?: () => void
-  onDelete?: () => void
   isOwner?: boolean
 }
 
-export function OfferCard({ offer, onPurchase, onDeactivate, onDelete, isOwner = false }: OfferCardProps) {
+export function OfferCard({ offer, onPurchase, onDeactivate, isOwner = false }: OfferCardProps) {
   const { wallet, contract } = useAppContext()
   const [isPurchasing, setIsPurchasing] = useState(false)
   const [isDeactivating, setIsDeactivating] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
 
   const handlePurchase = async () => {
     if (!wallet.signer) {
@@ -43,7 +41,8 @@ export function OfferCard({ offer, onPurchase, onDeactivate, onDelete, isOwner =
     try {
       setIsPurchasing(true)
       
-      await contract.purchaseOffer(offer.id, wallet.signer)
+      // Purchase using public price (UI shows this, blockchain validates with encrypted price)
+      await contract.purchaseOffer(offer.id, '1') // Purchase 1 slot by default
       
       toast.success('Offer purchased successfully!')
       onPurchase()
@@ -53,6 +52,7 @@ export function OfferCard({ offer, onPurchase, onDeactivate, onDelete, isOwner =
       setIsPurchasing(false)
     }
   }
+
 
   const handleDeactivate = async () => {
     if (!wallet.signer) {
@@ -72,27 +72,6 @@ export function OfferCard({ offer, onPurchase, onDeactivate, onDelete, isOwner =
     }
   }
 
-  const handleDelete = async () => {
-    if (!wallet.signer) {
-      toast.error('Please connect your wallet first')
-      return
-    }
-
-    if (!confirm('Are you sure you want to delete this offer? This action cannot be undone.')) {
-      return
-    }
-
-    try {
-      setIsDeleting(true)
-      await contract.deleteOffer(offer.id, wallet.signer)
-      toast.success('Offer deleted successfully!')
-      onDelete?.()
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete offer')
-    } finally {
-      setIsDeleting(false)
-    }
-  }
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
@@ -159,11 +138,13 @@ export function OfferCard({ offer, onPurchase, onDeactivate, onDelete, isOwner =
       </div>
 
       {/* FHE Badge */}
-      <div className="flex items-center space-x-2 mb-4">
-        <div className="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center">
-          <Shield className="w-3 h-3 text-black" />
+      <div className="flex items-center mb-4">
+        <div className="flex items-center space-x-2">
+          <div className="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center">
+            <Shield className="w-3 h-3 text-black" />
+          </div>
+          <span className="text-xs text-primary-400 font-medium">FHE Encrypted</span>
         </div>
-        <span className="text-xs text-primary-400 font-medium">FHE Encrypted</span>
       </div>
 
       {/* Footer */}
@@ -180,13 +161,6 @@ export function OfferCard({ offer, onPurchase, onDeactivate, onDelete, isOwner =
               className="btn-secondary text-sm px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDeactivating ? 'Deactivating...' : 'Deactivate'}
-            </button>
-            <button
-              onClick={handleDelete}
-              disabled={isDeleting || !wallet.isConnected}
-              className="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete'}
             </button>
           </div>
         ) : (

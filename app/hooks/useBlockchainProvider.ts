@@ -5,28 +5,34 @@ import { ethers } from 'ethers'
 
 const RPC_OPTIONS = [
   {
+    name: 'Ankr',
+    url: 'https://rpc.ankr.com/eth_sepolia',
+    description: 'Ankr (free tier - most reliable)'
+  },
+  {
+    name: 'Alchemy',
+    url: 'https://eth-sepolia.g.alchemy.com/v2/demo',
+    description: 'Alchemy (demo key)'
+  },
+  {
+    name: 'Gateway.fm',
+    url: 'https://sepolia.gateway.tenderly.co',
+    description: 'Gateway.fm (backup)'
+  },
+  {
     name: '1RPC',
-    url: 'https://1rpc.io/sepolia',
-    description: 'Free, fast, reliable'
+    url: 'https://1rpc.io/eth/sepolia',
+    description: '1RPC (free tier)'
   },
   {
     name: 'DRPC',
     url: 'https://sepolia.drpc.org',
-    description: 'High performance'
-  },
-  {
-    name: 'PublicNode',
-    url: 'https://ethereum-sepolia-rpc.publicnode.com',
-    description: 'Public RPC'
-  },
-  {
-    name: 'Alchemy (Demo)',
-    url: 'https://eth-sepolia.g.alchemy.com/v2/demo',
-    description: 'Alchemy demo endpoint'
+    description: 'DRPC (fallback)'
   }
 ]
 
 export function useBlockchainProvider() {
+  // Use Ankr as default (most reliable)
   const [currentRPC, setCurrentRPC] = useState(RPC_OPTIONS[0])
   const [provider, setProvider] = useState<ethers.JsonRpcProvider | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -38,10 +44,20 @@ export function useBlockchainProvider() {
       console.log('Initializing blockchain provider with RPC:', rpcUrl)
       setError(null)
       
-      const newProvider = new ethers.JsonRpcProvider(rpcUrl)
+      const newProvider = new ethers.JsonRpcProvider(rpcUrl, undefined, {
+        polling: false, // Disable automatic polling
+        pollingInterval: 10000 // Poll every 10 seconds if polling is enabled
+      })
       
-      // Test connection
-      const network = await newProvider.getNetwork()
+      // Test connection with timeout
+      const networkPromise = newProvider.getNetwork()
+      const network = await Promise.race([
+        networkPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Network request timeout')), 10000)
+        )
+      ]) as any
+      
       console.log('Provider network:', network)
       
       if (network.chainId !== BigInt(11155111)) {
@@ -49,7 +65,14 @@ export function useBlockchainProvider() {
       }
       
       // Test with a simple call
-      const blockNumber = await newProvider.getBlockNumber()
+      const blockNumberPromise = newProvider.getBlockNumber()
+      const blockNumber = await Promise.race([
+        blockNumberPromise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Block number request timeout')), 10000)
+        )
+      ]) as any
+      
       console.log('Provider connection test - Block number:', blockNumber)
       
       setProvider(newProvider)
@@ -69,6 +92,7 @@ export function useBlockchainProvider() {
     const rpcOption = RPC_OPTIONS.find(rpc => rpc.url === rpcUrl)
     if (rpcOption) {
       setCurrentRPC(rpcOption)
+      // Initialize provider directly without useEffect
       initializeProvider(rpcUrl)
     }
   }, [initializeProvider])
@@ -97,10 +121,17 @@ export function useBlockchainProvider() {
     }
   }, [])
 
-  // Initialize on mount
+  // Initialize on mount with delay
   useEffect(() => {
-    initializeProvider(currentRPC.url)
-  }, [initializeProvider, currentRPC.url])
+    const initProvider = async () => {
+      // Wait 2 seconds before initializing to avoid rate limits
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      console.log('🔄 Initializing blockchain provider with RPC:', currentRPC.url)
+      initializeProvider(currentRPC.url)
+    }
+    
+    initProvider()
+  }, []) // Only run once on mount
 
   return {
     provider,

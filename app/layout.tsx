@@ -1,8 +1,9 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { WalletProvider } from './components/WalletProvider'
+import { AppProvider } from './context/AppContext'
 import { Toaster } from 'react-hot-toast'
+import './lib/polyfills'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,8 +19,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof global === 'undefined') {
+                window.global = window;
+              }
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className}>
-        <WalletProvider>
+        <AppProvider>
           {children}
           <Toaster 
             position="top-right"
@@ -31,7 +43,7 @@ export default function RootLayout({
               },
             }}
           />
-        </WalletProvider>
+        </AppProvider>
       </body>
     </html>
   )

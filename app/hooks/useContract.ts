@@ -2,11 +2,80 @@
 
 import { useState, useEffect } from 'react'
 import { ethers } from 'ethers'
-import contractInfo from '../../contract-info.json'
-import { getMockContract } from '../lib/mockContract'
+import contractInfo from '../contract-info.json'
+import { zamaRelayer } from '../lib/zamaRelayer'
+
+// Debug mode - set DEBUG=true in .env.local to enable verbose logging
+const DEBUG = process.env.NEXT_PUBLIC_DEBUG === 'true'
+
+const debugLog = (...args: any[]) => {
+  if (DEBUG) {
+    console.log(...args)
+  }
+}
+
+const infoLog = (...args: any[]) => {
+  console.log(...args)
+}
+
+// Centralized RPC provider management with fallback
+const getPreferredProvider = async () => {
+  // Sepolia RPC endpoints with fallback
+  const rpcUrls = [
+    'https://ethereum-sepolia-rpc.publicnode.com',  // Primary Sepolia RPC
+    'https://rpc.sepolia.org',
+    'https://sepolia.gateway.tenderly.co',
+    'https://endpoints.omniatech.io/v1/eth/sepolia/public',
+    'https://sepolia.drpc.org',
+    'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'
+    // Removed 1rpc.io completely due to quota issues
+  ]
+
+  for (const url of rpcUrls) {
+    try {
+      debugLog(`🔍 Testing RPC: ${url}`)
+      const provider = new ethers.JsonRpcProvider(url)
+      
+      // Test connection with a simple call and timeout
+      const testPromise = provider.getBlockNumber()
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('RPC timeout')), 5000)
+      )
+      
+      await Promise.race([testPromise, timeoutPromise])
+      
+      infoLog(`✅ Using RPC: ${url}`)
+      return provider
+    } catch (err: any) {
+      debugLog(`❌ RPC ${url} недоступен:`, err?.message || 'Unknown error')
+      continue
+    }
+  }
+  
+  throw new Error('All RPC endpoints are unavailable')
+}
+
+// Error parsing utility
+const parseContractError = (error: any, contract: any) => {
+  try {
+    if (error.data && contract?.interface) {
+      const parsedError = contract.interface.parseError(error.data)
+      if (parsedError) {
+        return `Contract Error: ${parsedError.name}(${parsedError.args.join(', ')})`
+      }
+    }
+  } catch (parseError) {
+    debugLog('Failed to parse contract error:', parseError)
+  }
+  
+  // Fallback to original error message
+  return error.reason || error.message || 'Unknown error'
+}
 
 interface ContractState {
   contract: any | null
+  contractWithSigner: any | null
+  fheRelayer: any | null
   loading: boolean
   error: string | null
 }
@@ -14,137 +83,116 @@ interface ContractState {
 export function useContract() {
   const [state, setState] = useState<ContractState>({
     contract: null,
+    contractWithSigner: null,
+    fheRelayer: null,
     loading: true,
     error: null,
   })
 
   const initializeContract = async (provider: ethers.JsonRpcProvider | ethers.BrowserProvider) => {
     try {
-      console.log('=== CONTRACT INITIALIZATION START ===')
-      console.log('Contract address:', contractInfo.address)
-      console.log('Contract ABI length:', contractInfo.abi.length)
-      console.log('Expected network:', contractInfo.network)
-      console.log('Provider type:', provider.constructor.name)
+      // Force use of reliable RPC - always use fallback system
+      infoLog('🔄 Initializing contract with fallback RPC system')
       
-      // Check if we're on the correct network
-      const network = await provider.getNetwork()
-      console.log('Current network:', network)
-      console.log('Network chainId:', network.chainId)
-      console.log('Expected chainId for Sepolia:', BigInt(11155111))
+      // Always use our fallback RPC system instead of any cached provider
+      const reliableProvider = await getPreferredProvider()
       
-      // Check if we're on Sepolia network (any RPC)
-      if (contractInfo.network === 'sepolia' && network.chainId !== BigInt(11155111)) {
-        console.error('Wrong network! Expected Sepolia (11155111), got:', network.chainId)
-        setState({
-          contract: null,
-          loading: false,
-          error: 'Please switch to Sepolia network (Chain ID: 11155111)',
-        })
-        return null
+      // Override the provider with our reliable one
+      provider = reliableProvider
+      
+      infoLog('📡 Provider initialized:', {
+        network: (await provider.getNetwork()).name,
+        chainId: (await provider.getNetwork()).chainId.toString()
+      })
+
+      // Get contract address and ABI
+      console.log('🔍 Contract info loaded:', contractInfo)
+      
+      if (!contractInfo.marketplace) {
+        console.error('❌ Contract info structure:', contractInfo)
+        throw new Error('Contract info not found. Please deploy the contract first.')
       }
       
-      // Test provider connection
-      try {
-        const blockNumber = await provider.getBlockNumber()
-        console.log('Provider connection test - Block number:', blockNumber)
-      } catch (providerError) {
-        console.error('Provider connection test failed:', providerError)
-        throw providerError
-      }
-      
-      // Use real contract
-      const contract = new ethers.Contract(
-        contractInfo.address,
-        contractInfo.abi,
-        provider
-      )
-      
-      console.log('Contract instance created:', contract)
-      console.log('Contract target address:', contract.target)
-      
+      const contractAddress = contractInfo.marketplace.address
+      const contractABI = contractInfo.marketplace.abi
+
+      infoLog('📋 Contract info:', {
+        address: contractAddress,
+        name: contractInfo.marketplace.name,
+        network: contractInfo.network
+      })
+
+      // Create contract instance
+      const contract = new ethers.Contract(contractAddress, contractABI, provider)
+
       // Test contract connection
       try {
-        const owner = await contract.owner()
-        console.log('Contract connection test - Owner:', owner)
-      } catch (contractError) {
-        console.error('Contract connection test failed:', contractError)
-        throw contractError
+        const totalOffers = await contract.totalOffersCreated()
+        infoLog('✅ Contract connection test successful:', {
+          totalOffers: totalOffers.toString()
+        })
+      } catch (testError: any) {
+        console.warn('⚠️ Contract connection test failed:', testError.message)
+        // Don't fail initialization if test fails, contract might still work
       }
-      
-      console.log('Contract initialized successfully!')
-      console.log('=== CONTRACT INITIALIZATION END ===')
-      
+
+      // Initialize FHE Relayer
+      let fheRelayerClient = null;
+      try {
+        const isRelayerAvailable = await zamaRelayer.isRelayerAvailable();
+        if (isRelayerAvailable) {
+          fheRelayerClient = zamaRelayer;
+          infoLog('✅ Zama Relayer initialized');
+        } else {
+          infoLog('⚠️ Zama Relayer not available');
+        }
+      } catch (error: any) {
+        infoLog('⚠️ Failed to initialize Zama Relayer:', error.message);
+      }
+
       setState({
         contract,
+        contractWithSigner: null, // Will be set when wallet connects
+        fheRelayer: fheRelayerClient,
         loading: false,
         error: null,
       })
-      
-      return contract
-    } catch (error) {
-      console.error('=== CONTRACT INITIALIZATION ERROR ===')
-      console.error('Error details:', error)
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      const errorStack = error instanceof Error ? error.stack : 'No stack trace'
-      
-      console.error('Error message:', errorMessage)
-      console.error('Error stack:', errorStack)
-      console.error('=== END ERROR ===')
+
+      infoLog('✅ Contract initialized successfully')
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to initialize contract'
+      console.error('❌ Contract initialization failed:', errorMessage)
       
       setState({
         contract: null,
+        contractWithSigner: null,
+        fheRelayer: null,
         loading: false,
-        error: `Failed to initialize contract: ${errorMessage}`,
+        error: errorMessage,
       })
-      return null
     }
   }
 
-  const loadOffers = async () => {
-    console.log('loadOffers called, contract state:', !!state.contract)
-    
+  const connectSigner = async (signer: ethers.Signer) => {
     if (!state.contract) {
-      console.log('Contract not initialized')
-      return []
+      throw new Error('Contract not initialized')
     }
 
     try {
-      console.log('Loading offers...')
-      console.log('Contract address:', state.contract.target)
+      const signerAddress = await signer.getAddress()
+      infoLog('🔄 Connecting signer to contract:', signerAddress)
       
-      const activeOfferIds = await state.contract.getActiveOffers()
-      console.log('Active offer IDs:', activeOfferIds)
-      console.log('Active offer IDs length:', activeOfferIds.length)
+      const contractWithSigner = state.contract.connect(signer)
+      setState(prev => ({
+        ...prev,
+        contractWithSigner
+      }))
       
-      const offers = []
-
-      for (const offerId of activeOfferIds) {
-        console.log('Loading offer:', offerId.toString())
-        const offerData = await state.contract.getOffer(offerId)
-        console.log('Offer data:', offerData)
-        
-        offers.push({
-          id: offerId.toString(),
-          seller: offerData.seller,
-          title: offerData.title,
-          description: offerData.description,
-          price: ethers.formatEther(offerData.price),
-          duration: offerData.duration.toString(),
-          availableSlots: offerData.availableSlots.toString(),
-          isActive: offerData.isActive,
-          createdAt: new Date(Number(offerData.createdAt) * 1000),
-        })
-      }
-
-      console.log('Loaded offers:', offers)
-      console.log('Offers count:', offers.length)
-      return offers
-    } catch (error) {
-      console.error('Error loading offers:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.error('Error details:', errorMessage)
-      return []
+      infoLog('✅ Signer connected to contract:', signerAddress)
+      return contractWithSigner
+    } catch (error: any) {
+      console.error('❌ Failed to connect signer:', error.message)
+      throw new Error(`Failed to connect signer: ${error.message}`)
     }
   }
 
@@ -153,183 +201,326 @@ export function useContract() {
     description: string,
     price: string,
     duration: string,
-    availableSlots: string,
-    signer: ethers.JsonRpcSigner
+    slots: string,
+    signer: ethers.Signer
   ) => {
-    if (!state.contract) throw new Error('Contract not initialized')
+    if (!state.contractWithSigner) {
+      throw new Error('Contract not connected to wallet. Please connect your wallet first.')
+    }
+
+    // Always use the provided signer to ensure we have a valid connection
+    const contractWithSigner = state.contract.connect(signer)
+    const signerAddress = await signer.getAddress()
+    infoLog('🔍 Using signer address for offer:', signerAddress)
     
+    // Update the state with the new contract instance
+    setState(prev => ({
+      ...prev,
+      contractWithSigner
+    }))
+
     try {
-      console.log('Creating offer with FHE data:', { title, description, price, duration, availableSlots })
-      
-      const contractWithSigner = state.contract.connect(signer)
+      infoLog('📝 Creating offer with parameters:', {
+        title,
+        description,
+        price,
+        duration,
+        slots
+      })
+
+      // Convert string values to BigInt
       const priceWei = ethers.parseEther(price)
-      const durationHours = BigInt(duration)
-      const slots = BigInt(availableSlots)
+      const durationBigInt = BigInt(duration)
+      const slotsBigInt = BigInt(slots)
 
-      console.log('Converted values:', { priceWei: priceWei.toString(), durationHours: durationHours.toString(), slots: slots.toString() })
+      infoLog('📝 Converted values:', {
+        priceWei: priceWei.toString(),
+        duration: durationBigInt.toString(),
+        slots: slotsBigInt.toString()
+      })
 
-      // For FHE demo, we'll create mock encrypted values as bytes32
-      // In production, these would be properly encrypted using FHEVM relayer
-      const mockEncryptedPrice = ethers.zeroPadValue(ethers.toBeHex(priceWei), 32)
-      const mockEncryptedDuration = ethers.zeroPadValue(ethers.toBeHex(durationHours), 32)
-      const mockEncryptedSlots = ethers.zeroPadValue(ethers.toBeHex(slots), 32)
-
-      console.log('Mock encrypted values:', { mockEncryptedPrice, mockEncryptedDuration, mockEncryptedSlots })
-
+      // Call the contract method
       const tx = await contractWithSigner.createOffer(
         title,
         description,
         priceWei,
-        durationHours,
-        slots,
-        mockEncryptedPrice,
-        mockEncryptedDuration,
-        mockEncryptedSlots
+        durationBigInt,
+        slotsBigInt
       )
 
-      console.log('Transaction sent:', tx.hash)
+      infoLog('📝 Transaction sent:', tx.hash)
+      
+      // Wait for transaction confirmation
       const receipt = await tx.wait()
-      console.log('Transaction confirmed:', receipt)
-
-      return tx.hash
-    } catch (error) {
-      console.error('Error creating offer:', error)
-      throw error
-    }
-  }
-
-  const purchaseOffer = async (
-    offerId: string,
-    signer: ethers.JsonRpcSigner
-  ) => {
-    if (!state.contract) throw new Error('Contract not initialized')
-
-    try {
-      const contractWithSigner = state.contract.connect(signer)
       
-      // Get offer details to get the price
-      const offerData = await state.contract.getOffer(offerId)
-      
-      const tx = await contractWithSigner.purchaseOffer(offerId, {
-        value: offerData.price,
+      infoLog('✅ Offer created successfully:', {
+        transactionHash: receipt.hash,
+        gasUsed: receipt.gasUsed.toString(),
+        blockNumber: receipt.blockNumber
       })
 
-      await tx.wait()
-      return tx.hash
-    } catch (error) {
-      console.error('Error purchasing offer:', error)
-      throw error
+      return receipt
+    } catch (error: any) {
+      const errorMessage = parseContractError(error, state.contract)
+      console.error('📝 Failed to create offer:', errorMessage)
+      throw new Error(errorMessage)
     }
   }
 
-  const deactivateOffer = async (
-    offerId: string,
-    signer: ethers.JsonRpcSigner
-  ) => {
-    if (!state.contract) throw new Error('Contract not initialized')
-
-    try {
-      const contractWithSigner = state.contract.connect(signer)
-      const tx = await contractWithSigner.deactivateOffer(offerId)
-      await tx.wait()
-      return tx.hash
-    } catch (error) {
-      console.error('Error deactivating offer:', error)
-      throw error
+  const purchaseOffer = async (offerId: string, slots: string) => {
+    if (!state.contract) {
+      throw new Error('Contract not initialized')
     }
-  }
-
-  const deleteOffer = async (
-    offerId: string,
-    signer: ethers.JsonRpcSigner
-  ) => {
-    if (!state.contract) throw new Error('Contract not initialized')
 
     try {
-      const contractWithSigner = state.contract.connect(signer)
-      const tx = await contractWithSigner.deleteOffer(offerId)
-      await tx.wait()
-      return tx.hash
-    } catch (error) {
-      console.error('Error deleting offer:', error)
-      throw error
-    }
-  }
+      infoLog('🛒 Purchasing offer:', {
+        offerId,
+        slots
+      })
 
-  // FHE functions
-  const getEncryptedOffer = async (offerId: string) => {
-    if (!state.contract) throw new Error('Contract not initialized')
-    
-    try {
-      const offerData = await state.contract.getEncryptedOffer(offerId)
-      return offerData
-    } catch (error) {
-      console.error('Error getting encrypted offer:', error)
-      throw error
-    }
-  }
-
-  const compareEncryptedPrices = async (price1: string, price2: string) => {
-    if (!state.contract) throw new Error('Contract not initialized')
-    
-    try {
-      // Mock encrypted values for demo as bytes32
-      const mockEncryptedPrice1 = ethers.zeroPadValue(ethers.toBeHex(parseInt(price1)), 32)
-      const mockEncryptedPrice2 = ethers.zeroPadValue(ethers.toBeHex(parseInt(price2)), 32)
+      // Get offer details to calculate total price
+      const offer = await state.contract.offers(offerId)
       
-      const result = await state.contract.compareEncryptedPrices(mockEncryptedPrice1, mockEncryptedPrice2)
-      return result
-    } catch (error) {
-      console.error('Error comparing encrypted prices:', error)
-      throw error
-    }
-  }
-
-  const isEncryptedPriceGreaterThan = async (price: string, threshold: number) => {
-    if (!state.contract) throw new Error('Contract not initialized')
-    
-    try {
-      // Mock encrypted value for demo as bytes32
-      const mockEncryptedPrice = ethers.zeroPadValue(ethers.toBeHex(parseInt(price)), 32)
+      infoLog('📋 Offer details:', {
+        offerId,
+        offer: offer,
+        price: offer?.price,
+        priceType: typeof offer?.price,
+        publicPrice: offer?.publicPrice,
+        allFields: Object.keys(offer || {})
+      })
       
-      const result = await state.contract.isEncryptedPriceGreaterThan(mockEncryptedPrice, threshold)
-      return result
-    } catch (error) {
-      console.error('Error checking encrypted price:', error)
-      throw error
-    }
-  }
-
-  // Get contract statistics
-  const getContractStats = async () => {
-    if (!state.contract) throw new Error('Contract not initialized')
-    
-    try {
-      const stats = await state.contract.getContractStats()
-      return {
-        totalOffers: stats[0].toString(),
-        totalPurchases: stats[1].toString(),
-        totalVolume: ethers.formatEther(stats[2]) + " ETH",
-        activeOffers: stats[3].toString(),
-        fheEnabled: stats[4]
+      // Check if offer exists and has price (try both price and publicPrice fields)
+      if (!offer || (offer.price === undefined && offer.publicPrice === undefined)) {
+        throw new Error('Offer not found or invalid')
       }
-    } catch (error) {
-      console.error('Error getting contract stats:', error)
-      throw error
+      
+      // Use publicPrice if available, otherwise use price
+      const priceField = offer.publicPrice !== undefined ? offer.publicPrice : offer.price
+      
+      const pricePerSlot = BigInt(priceField.toString())
+      const slotsBigInt = BigInt(slots)
+      const totalPrice = pricePerSlot * slotsBigInt
+
+      infoLog('💰 Purchase details:', {
+        pricePerSlot: pricePerSlot.toString(),
+        slots: slotsBigInt.toString(),
+        totalPrice: totalPrice.toString(),
+        totalPriceETH: ethers.formatEther(totalPrice)
+      })
+
+      // Call the contract method with payment
+      const tx = await state.contractWithSigner.purchaseOffer(offerId, slotsBigInt, {
+        value: totalPrice
+      })
+
+      infoLog('📝 Purchase transaction sent:', tx.hash)
+      
+      // Wait for transaction confirmation
+      const receipt = await tx.wait()
+      
+      infoLog('✅ Purchase completed successfully:', {
+        transactionHash: receipt.hash,
+        gasUsed: receipt.gasUsed.toString(),
+        blockNumber: receipt.blockNumber
+      })
+
+      return receipt
+    } catch (error: any) {
+      const errorMessage = parseContractError(error, state.contract)
+      console.error('📝 Failed to purchase offer:', errorMessage)
+      throw new Error(errorMessage)
     }
   }
+
+  const getContractStats = async () => {
+    if (!state.contract) {
+      throw new Error('Contract not initialized')
+    }
+
+    try {
+      const [totalOffers, totalPurchases, totalVolume, activeOffers] = await state.contract.getContractStats()
+      
+      return {
+        totalOffers: totalOffers.toString(),
+        totalPurchases: totalPurchases.toString(),
+        totalVolume: ethers.formatEther(totalVolume),
+        activeOffers: activeOffers.toString()
+      }
+    } catch (error: any) {
+      const errorMessage = parseContractError(error, state.contract)
+      console.error('📝 Failed to get contract stats:', errorMessage)
+      throw new Error(errorMessage)
+    }
+  }
+
+  const getActiveOffers = async () => {
+    if (!state.contract) {
+      throw new Error('Contract not initialized')
+    }
+
+    try {
+      const offerIds = await state.contract.getActiveOfferIds()
+      console.log('📋 Active offer IDs:', offerIds)
+      
+      const offers = []
+
+      for (const id of offerIds) {
+        const offer = await state.contract.offers(id)
+        offers.push({
+          id: id.toString(),
+          seller: offer.creator, // Map creator to seller for UI compatibility
+          creator: offer.creator,
+          title: offer.title,
+          description: offer.description,
+          price: ethers.formatEther(offer.publicPrice),
+          duration: offer.duration.toString(),
+          slots: offer.slots.toString(),
+          availableSlots: offer.availableSlots.toString(),
+          isActive: offer.isActive,
+          createdAt: new Date(Number(offer.createdAt) * 1000),
+          expiresAt: new Date(Number(offer.expiresAt) * 1000)
+        })
+      }
+
+      console.log('📋 Processed offers:', offers)
+      return offers
+    } catch (error: any) {
+      const errorMessage = parseContractError(error, state.contract)
+      console.error('📝 Failed to get active offers:', errorMessage)
+      throw new Error(errorMessage)
+    }
+  }
+
+  const createFHEOffer = async (
+    title: string,
+    description: string,
+    publicPrice: string,
+    duration: string,
+    slots: string,
+    signer: ethers.Signer
+  ) => {
+    if (!state.contractWithSigner) {
+      throw new Error('Contract not connected to wallet. Please connect your wallet first.')
+    }
+
+    // Always use the provided signer to ensure we have a valid connection
+    const contractWithSigner = state.contract.connect(signer)
+    const signerAddress = await signer.getAddress()
+    infoLog('🔍 Using signer address for FHE offer:', signerAddress)
+    
+    // Update the state with the new contract instance
+    setState(prev => ({
+      ...prev,
+      contractWithSigner
+    }))
+
+    if (!state.fheRelayer) {
+      throw new Error('FHE Relayer not available')
+    }
+
+    try {
+      infoLog('🔐 Creating FHE offer with parameters:', {
+        title,
+        description,
+        publicPrice,
+        duration,
+        slots
+      })
+
+      // Create encrypted data using Zama Relayer
+      const encryptedData = await state.fheRelayer.createEncryptedOfferData(
+        publicPrice,
+        duration,
+        slots
+      )
+
+      infoLog('🔐 FHE encryption completed, calling smart contract...')
+
+      // Convert handles to proper format for contract
+      const handle1 = ethers.getBytes(encryptedData.handles[0])
+      const handle2 = ethers.getBytes(encryptedData.handles[1])
+      const handle3 = ethers.getBytes(encryptedData.handles[2])
+      const attestation = ethers.getBytes(encryptedData.attestation)
+
+      // Call the FHE contract method
+      const tx = await contractWithSigner.createOfferWithFHE(
+        title,
+        description,
+        ethers.parseEther(publicPrice), // public price for display
+        BigInt(duration),
+        BigInt(slots),
+        handle1,
+        handle2,
+        handle3,
+        attestation
+      )
+
+      infoLog('📝 FHE transaction sent:', tx.hash)
+      
+      // Wait for transaction confirmation
+      const receipt = await tx.wait()
+      
+      infoLog('✅ FHE offer created successfully:', {
+        transactionHash: receipt.hash,
+        gasUsed: receipt.gasUsed.toString(),
+        blockNumber: receipt.blockNumber
+      })
+
+      return receipt
+    } catch (error: any) {
+      const errorMessage = parseContractError(error, state.contract)
+      console.error('📝 Failed to create FHE offer:', errorMessage)
+      throw new Error(errorMessage)
+    }
+  }
+
+  // Alias for getActiveOffers to match the expected interface
+  const deactivateOffer = async (offerId: string, signer: ethers.Signer) => {
+    if (!state.contract) {
+      throw new Error('Contract not initialized')
+    }
+
+    // Always use the provided signer to ensure we have a valid connection
+    const contractWithSigner = state.contract.connect(signer)
+    const signerAddress = await signer.getAddress()
+    infoLog('🔍 Using signer address for deactivation:', signerAddress)
+    
+    // Update the state with the new contract instance
+    setState(prev => ({
+      ...prev,
+      contractWithSigner
+    }))
+
+    try {
+      infoLog('📝 Deactivating offer:', offerId)
+      
+      const tx = await contractWithSigner.deactivateOffer(offerId)
+      infoLog('📝 Deactivation transaction sent:', tx.hash)
+      
+      const receipt = await tx.wait()
+      infoLog('✅ Offer deactivated successfully:', receipt)
+      
+      return receipt
+    } catch (error: any) {
+      const errorMessage = error.reason || error.message || 'Unknown error'
+      console.error('📝 Failed to deactivate offer:', errorMessage)
+      throw new Error(errorMessage)
+    }
+  }
+
+  const loadOffers = getActiveOffers
 
   return {
     ...state,
     initializeContract,
-    loadOffers,
+    connectSigner,
     createOffer,
+    createFHEOffer,
     purchaseOffer,
     deactivateOffer,
-    deleteOffer,
-    getEncryptedOffer,
-    compareEncryptedPrices,
-    isEncryptedPriceGreaterThan,
     getContractStats,
+    getActiveOffers,
+    loadOffers,
   }
 }
