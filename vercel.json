@@ -1,7 +1,4 @@
 {
-  "framework": "nextjs",
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
   "env": {
     "NEXT_PUBLIC_CONTRACT_ADDRESS": "0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51",
     "NEXT_PUBLIC_NETWORK": "sepolia",
