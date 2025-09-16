@@ -11,10 +11,13 @@ api/
 .env.test.local
 .env.production.local
 
-# Ignore build artifacts (but keep .next for deployment)
+# Ignore build artifacts
 out/
 build/
 dist/
+
+# Keep .next for Next.js deployment
+# .next/ is needed for Vercel deployment
 
 # Ignore contracts (not needed for frontend deployment)
 contracts/
