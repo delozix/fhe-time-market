@@ -8,10 +8,5 @@
     "NEXT_PUBLIC_CHAIN_ID": "11155111",
     "NEXT_PUBLIC_FHE_RELAYER_URL": "https://relayer.testnet.zama.cloud",
     "NEXT_PUBLIC_FHE_NETWORK": "sepolia"
-  },
-  "functions": {
-    "app/api/**/*.js": {
-      "runtime": "nodejs18.x"
-    }
   }
 }
