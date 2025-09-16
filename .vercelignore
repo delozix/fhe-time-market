@@ -1,7 +1,22 @@
-# CRITICAL: Ignore ALL PHP files that cause Vercel runtime errors
+# CRITICAL: Ignore ALL non-Next.js files for clean deployment
 node_modules/
+**/node_modules/
+
+# Ignore contracts completely
+contracts/
+**/contracts/
+*.sol
+
+# Ignore artifacts and cache
+**/artifacts/
+**/cache/
+**/fhevmTemp/
+
+# Ignore PHP files
 **/*.php
 *.php
+
+# Ignore API directories
 api/
 **/api/
 
@@ -16,13 +31,6 @@ out/
 build/
 dist/
 
-# Keep .next for Next.js deployment
-# .next/ is needed for Vercel deployment
-
-# Ignore contracts (not needed for frontend deployment)
-contracts/
-*.sol
-
 # Ignore test files
 **/*.test.*
 **/*.spec.*
@@ -33,7 +41,9 @@ tests/
 *.md
 docs/
 
-# Ignore any problematic directories
-**/node_modules/
-**/cache/
-**/artifacts/
+# Ignore archives
+*.zip
+*.tar.gz
+*.rar
+
+# Keep only Next.js files: app/, package.json, next.config.js, etc.
