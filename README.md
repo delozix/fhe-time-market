@@ -1,130 +1,196 @@
-# Time Marketplace - FHEVM DApp
+# Time Marketplace with FHE Encryption
 
-A decentralized time marketplace built with Next.js, Hardhat, and FHEVM (Fully Homomorphic Encryption Virtual Machine) from Zama.
+A decentralized marketplace for time-based services with **Fully Homomorphic Encryption (FHE)** using Zama technology. This project allows users to create, sell, and purchase time-based services while keeping sensitive pricing data encrypted.
 
 ## 🚀 Features
 
-- **Time-based Services**: Create and purchase time-based service offers
-- **FHEVM Integration**: Encrypted data storage and computation using Zama's FHEVM
-- **Wallet Integration**: MetaMask support for Sepolia testnet
-- **Real-time Updates**: Live offer listings and purchases
-- **User Management**: Create, manage, and track your offers and purchases
+- **FHE-Encrypted Offers**: Create offers with encrypted pricing data using Zama's FHE technology
+- **Decentralized Marketplace**: Built on Ethereum Sepolia testnet
+- **Wallet Integration**: MetaMask support for secure transactions
+- **Real-time Updates**: Live offer management and purchasing
+- **Responsive UI**: Modern, mobile-friendly interface
+- **RPC Fallback**: Multiple RPC providers for reliable connection
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js 14.2.5, React 18.3.1, TypeScript
-- **Styling**: Tailwind CSS
-- **Blockchain**: Hardhat 2.22.9, Solidity 0.8.24
-- **FHE**: @fhevm/solidity 0.8.0, @zama-fhe/relayer-sdk 0.2.0
-- **Web3**: ethers.js 6.14.0
-- **Network**: Sepolia Testnet
+### Frontend
+- **Next.js 14** - React framework
+- **TypeScript** - Type-safe development
+- **Tailwind CSS** - Utility-first CSS framework
+- **Ethers.js 6** - Ethereum interaction
+- **React Hot Toast** - User notifications
+
+### Smart Contracts
+- **Solidity** - Smart contract language
+- **Hardhat** - Development environment
+- **FHEVM** - Fully Homomorphic Encryption for Ethereum
+- **OpenZeppelin** - Security libraries
+
+### FHE Integration
+- **Zama Relayer** - FHE computation service
+- **@fhevm/solidity** - FHE library for Solidity
+- **@zama-fhe/relayer-sdk** - Zama Relayer SDK
 
 ## 📋 Prerequisites
 
-- Node.js 20.x or higher
+- Node.js 18+ 
+- npm or yarn
 - MetaMask wallet
 - Sepolia ETH for gas fees
 
 ## 🚀 Quick Start
 
 ### 1. Clone and Install
-
 ```bash
 git clone <your-repo-url>
-cd time-marketplace
-npm install
-cd contracts
+cd time-marketplace-fhe
 npm install
 ```
 
 ### 2. Environment Setup
-
-```bash
-# Copy environment files
-cp env.example .env
-cp contracts/env.example contracts/.env
-
-# Edit .env files with your configuration
-# You'll need a private key for contract deployment
+Create `.env.local` file:
+```env
+NEXT_PUBLIC_CONTRACT_ADDRESS=0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51
+NEXT_PUBLIC_NETWORK=sepolia
+NEXT_PUBLIC_CHAIN_ID=11155111
+NEXT_PUBLIC_FHE_RELAYER_URL=https://relayer.testnet.zama.cloud
+NEXT_PUBLIC_FHE_NETWORK=sepolia
 ```
 
-### 3. Deploy Contract
-
+### 3. Run Development Server
 ```bash
-cd contracts
-npx hardhat run scripts/deploy-fhe.js --network sepolia
-```
-
-### 4. Start Development Server
-
-```bash
-cd ..
 npm run dev
 ```
 
-Visit `http://localhost:3000` to see the application.
+Visit `http://localhost:3000`
 
-## 🔧 Configuration
+## 🔧 Smart Contract Deployment
 
-### Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-SEPOLIA_RPC_URL=https://sepolia.drpc.org
-PRIVATE_KEY=your_private_key_here
-CONTRACT_ADDRESS=0xEca1b6BBEE238a403c258D3FF49aF46d92cc9DbA
-CHAIN_ID=11155111
+### Deploy to Sepolia
+```bash
+cd contracts
+npm install
+npx hardhat compile
+npx hardhat run scripts/deploy-fhe.js --network sepolia
 ```
 
-### Contract Deployment
-
-The contract is already deployed at:
+### Contract Details
 - **Address**: `0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51`
 - **Network**: Sepolia Testnet
-- **Explorer**: [View on Etherscan](https://sepolia.etherscan.io/address/0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51)
+- **Chain ID**: 11155111
 
-## 🎯 Usage
+## 📱 How to Use
 
-1. **Connect Wallet**: Click "Connect Wallet" to connect MetaMask
-2. **Create Offer**: Fill out the form to create a time-based service offer
-3. **Browse Offers**: View all active offers in the marketplace
-4. **Purchase**: Buy offers with ETH
-5. **Manage**: Deactivate or delete your own offers
+### 1. Connect Wallet
+- Click "Connect Wallet" button
+- Approve MetaMask connection
+- Ensure you're on Sepolia network
 
-## 🔐 FHEVM Features
+### 2. Create Offer
+- Click "Create Offer" button
+- Fill in offer details:
+  - Title and description
+  - Price (in ETH)
+  - Duration (in hours)
+  - Available slots
+- Submit transaction (uses FHE encryption)
 
-This DApp demonstrates FHEVM capabilities:
+### 3. Purchase Offer
+- Browse available offers
+- Click "Purchase" on desired offer
+- Confirm transaction in MetaMask
+- Offer automatically updates
 
-- **Encrypted Storage**: Sensitive data is encrypted using FHEVM
-- **Private Computation**: Operations on encrypted data without decryption
-- **Privacy-Preserving**: User data remains private even on public blockchain
+### 4. Manage Offers
+- View your created offers
+- Deactivate offers when needed
+- Monitor transaction status
+
+## 🔐 FHE Implementation
+
+### How It Works
+1. **Offer Creation**: Price, duration, and slots are encrypted using FHE
+2. **Encrypted Storage**: Sensitive data stored as encrypted handles on-chain
+3. **Purchase Validation**: FHE computation validates encrypted pricing
+4. **Public Display**: Only public price shown in UI
+
+### Zama Relayer Integration
+- Handles FHE encryption/decryption
+- Manages encrypted data attestations
+- Provides secure computation environment
+
+## 🌐 Network Configuration
+
+### Supported RPC Providers
+- Ankr (Primary)
+- Alchemy (Backup)
+- BlockPi (Fallback)
+- Gateway.fm (Backup)
+- 1RPC (Free tier)
+- DRPC (Fallback)
+
+### Auto-Switch Logic
+- Automatically switches RPC on connection failure
+- Maintains connection stability
+- Reduces rate limiting issues
 
 ## 📁 Project Structure
 
 ```
-├── app/                    # Next.js frontend
-│   ├── components/         # React components
-│   ├── hooks/             # Custom hooks
-│   └── page.tsx           # Main page
-├── contracts/             # Smart contracts
-│   ├── contracts/         # Solidity files
-│   ├── scripts/           # Deployment scripts
-│   └── test/              # Contract tests
-└── contract-info.json     # Contract ABI and address
+time-marketplace-fhe/
+├── app/                          # Next.js app directory
+│   ├── components/               # React components
+│   │   ├── CreateOfferModal.tsx  # Offer creation modal
+│   │   ├── OfferCard.tsx         # Individual offer display
+│   │   ├── RPCSelector.tsx       # RPC provider selector
+│   │   └── NetworkInstructions.tsx
+│   ├── context/                  # React context
+│   │   └── AppContext.tsx        # Global app state
+│   ├── hooks/                    # Custom hooks
+│   │   ├── useContract.ts        # Smart contract interaction
+│   │   ├── useWallet.ts          # Wallet management
+│   │   └── useBlockchainProvider.ts # RPC management
+│   ├── lib/                      # Utilities
+│   │   ├── zamaRelayer.ts        # Zama Relayer client
+│   │   └── polyfills.ts          # Browser polyfills
+│   └── page.tsx                  # Main page
+├── contracts/                    # Smart contracts
+│   ├── contracts/
+│   │   └── TimeMarketplaceFHE.sol # Main FHE contract
+│   ├── scripts/
+│   │   └── deploy-fhe.js         # Deployment script
+│   └── hardhat.config.js         # Hardhat configuration
+└── README.md
+```
+
+## 🔧 Development
+
+### Available Scripts
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npm run compile      # Compile smart contracts
+npm run deploy       # Deploy contracts to Sepolia
+```
+
+### Smart Contract Development
+```bash
+cd contracts
+npx hardhat compile  # Compile contracts
+npx hardhat test     # Run tests
+npx hardhat node     # Start local network
 ```
 
 ## 🚀 Deployment
 
 ### Vercel Deployment
+1. Connect GitHub repository to Vercel
+2. Set environment variables in Vercel dashboard
+3. Deploy automatically on push
 
-1. **Connect to GitHub**: Push your code to GitHub
-2. **Import to Vercel**: Connect your GitHub repository to Vercel
-3. **Environment Variables**: Add your environment variables in Vercel dashboard
-4. **Deploy**: Vercel will automatically deploy your application
-
-### Required Vercel Environment Variables
-
+### Environment Variables for Vercel
 ```
 NEXT_PUBLIC_CONTRACT_ADDRESS=0x02D5ADeDf81F3c5Ee3FeBC76736Fe2d6A7124e51
 NEXT_PUBLIC_NETWORK=sepolia
@@ -133,73 +199,70 @@ NEXT_PUBLIC_FHE_RELAYER_URL=https://relayer.testnet.zama.cloud
 NEXT_PUBLIC_FHE_NETWORK=sepolia
 ```
 
-## 🧪 Testing
+## 🔍 Troubleshooting
 
-```bash
-# Run contract tests
-cd contracts
-npx hardhat test
+### Common Issues
 
-# Run frontend tests
-npm test
-```
+**Wallet Connection Issues**
+- Ensure MetaMask is installed
+- Check if you're on Sepolia network
+- Try refreshing the page
 
-## 📝 Scripts
+**RPC Connection Problems**
+- App automatically switches RPC providers
+- Check internet connection
+- Wait a few seconds for auto-reconnection
 
-```bash
-# Development
-npm run dev
+**Transaction Failures**
+- Ensure sufficient ETH for gas
+- Check network congestion
+- Try increasing gas limit
 
-# Build
-npm run build
+**FHE Operations**
+- FHE operations may take longer
+- Ensure Zama Relayer is accessible
+- Check contract deployment status
 
-# Start production
-npm start
+### Debug Mode
+Enable debug logging by opening browser console and looking for:
+- 🔍 Contract interaction logs
+- 🔐 FHE operation logs
+- 🌐 RPC connection logs
 
-# Contract deployment
-cd contracts
-npx hardhat run scripts/deploy-fhe.js --network sepolia
+## 📚 Resources
 
-# Contract verification
-npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
-```
+- [Zama Documentation](https://docs.zama.ai/)
+- [FHEVM Documentation](https://docs.fhevm.org/)
+- [Ethers.js Documentation](https://docs.ethers.org/)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Hardhat Documentation](https://hardhat.org/docs)
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🔗 Links
+## 🙏 Acknowledgments
 
-- [Zama FHEVM Documentation](https://docs.zama.ai/fhevm)
-- [Hardhat Documentation](https://hardhat.org/docs)
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Ethers.js Documentation](https://docs.ethers.org/)
+- **Zama** for FHE technology and Relayer service
+- **FHEVM** for Ethereum FHE implementation
+- **OpenZeppelin** for security libraries
+- **Ethereum Foundation** for blockchain infrastructure
 
-## ⚠️ Security Notice
+## 📞 Support
 
-This is a demonstration project. For production use:
-
-- Use proper key management
-- Implement additional security measures
-- Conduct thorough security audits
-- Use mainnet contracts for production
-
-## 🆘 Support
-
-If you encounter any issues:
-
-1. Check the console for error messages
-2. Ensure MetaMask is connected to Sepolia
-3. Verify you have sufficient ETH for gas fees
-4. Check that the contract address is correct
+For support and questions:
+- Create an issue in this repository
+- Check the troubleshooting section
+- Review Zama documentation
 
 ---
 
-**Built with ❤️ using Zama FHEVM**
+**Built with ❤️ using Zama FHE technology**
