@@ -11,8 +11,7 @@ api/
 .env.test.local
 .env.production.local
 
-# Ignore build artifacts
-.next/
+# Ignore build artifacts (but keep .next for deployment)
 out/
 build/
 dist/
